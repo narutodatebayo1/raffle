@@ -1,19 +1,14 @@
-## Foundry
+## Test
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
-
-## Usage
-
-### Build
+Before running test, you must edit solidity version in lib\chainlink-brownie-contracts\contracts\src\v0.8\vrf\dev\VRFV2PlusWrapper.sol
 
 ```shell
-$ anvil --fork-url https://reth-ethereum.ithaca.xyz/rpc
+from pragma solidity 0.8.19;
+  to pragma solidity ^0.8.19;
 ```
 
-```shell
-$ forge script script/Counter.s.sol:CounterScript --fork-url http://localhost:8545 --broadcast --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-```
+To run test, use this command
 
 ```shell
-$ forge test --fork-url https://reth-ethereum.ithaca.xyz/rpc
+$ forge test --via-ir
 ```
