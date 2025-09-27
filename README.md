@@ -1,6 +1,6 @@
 ## Test
 
-Before running test, you must edit solidity version in lib\chainlink-brownie-contracts\contracts\src\v0.8\vrf\dev\VRFV2PlusWrapper.sol
+Before running test, you must edit solidity version in `lib\chainlink-brownie-contracts\contracts\src\v0.8\vrf\dev\VRFV2PlusWrapper.sol`
 
 From:
 

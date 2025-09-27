@@ -6,16 +6,25 @@ import {MyNFT} from "../src/MyNFT.sol";
 
 contract MyNFTTest is Test {
     MyNFT public myNFT;
+
+    address public constant OWNER = address(100);
     address public constant USER1 = address(1);
 
     function setUp() public {
+        vm.prank(OWNER);
         myNFT = new MyNFT();
     }
 
     function test_Mint() public {
-        vm.prank(USER1);
+        vm.prank(OWNER);
         uint256 tokenId = myNFT.mint();
 
-        assertEq(myNFT.ownerOf(tokenId), USER1);
+        assertEq(myNFT.ownerOf(tokenId), OWNER);
+    }
+
+    function test_Mint_RevertIf_NotOwner() public {
+        vm.expectRevert();
+        vm.prank(USER1);
+        myNFT.mint();
     }
 }

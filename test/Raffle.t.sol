@@ -2,12 +2,12 @@
 pragma solidity ^0.8.13;
 
 import {Test, console} from "forge-std/Test.sol";
-import {MyNFT} from "../src/MyNFT.sol";
-import {Raffle} from "../src/Raffle.sol";
 import {LinkToken} from "@chainlink/contracts/src/v0.8/shared/token/ERC677/LinkToken.sol";
 import {MockV3Aggregator} from "@chainlink/contracts/src/v0.8/tests/MockV3Aggregator.sol";
 import {VRFCoordinatorV2_5Mock} from "@chainlink/contracts/src/v0.8/vrf/mocks/VRFCoordinatorV2_5Mock.sol";
 import {VRFV2PlusWrapper} from "@chainlink/contracts/src/v0.8/vrf/dev/VRFV2PlusWrapper.sol";
+import {MyNFT} from "../src/MyNFT.sol";
+import {Raffle} from "../src/Raffle.sol";
 
 contract RaffleTest is Test {
     LinkToken public linkToken;
@@ -85,16 +85,20 @@ contract RaffleTest is Test {
     }
 
     modifier open() {
-        vm.prank(address(raffle));
+        vm.prank(OWNER);
         uint256 tokenId = myNFT.mint();
+        vm.prank(OWNER);
+        myNFT.transferFrom(OWNER, address(raffle), tokenId);
         vm.prank(OWNER);
         raffle.openRaffle(tokenId);
         _;
     }
 
-    function test_OpenRaffle() public {
-        vm.prank(address(raffle));
+    function test_openRaffle() public {
+        vm.prank(OWNER);
         uint256 tokenId = myNFT.mint();
+        vm.prank(OWNER);
+        myNFT.transferFrom(OWNER, address(raffle), tokenId);
         vm.prank(OWNER);
         raffle.openRaffle(tokenId);
 
@@ -102,28 +106,28 @@ contract RaffleTest is Test {
         assertEq(raffle.priceTokenId(), tokenId);
     }
 
-    function test_OpenRaffle_RevertIf_NotOwner() public {
-        vm.prank(address(raffle));
+    function test_openRaffle_RevertIf_NotOwner() public {
+        vm.prank(OWNER);
         uint256 tokenId = myNFT.mint();
+        vm.prank(OWNER);
+        myNFT.transferFrom(OWNER, address(raffle), tokenId);
+
         vm.expectRevert();
         raffle.openRaffle(tokenId);
     }
 
-    function test_OpenRaffle_RevertIf_RaffleClosed() public {
-        vm.prank(address(raffle));
-        uint256 tokenId1 = myNFT.mint();
+    function test_openRaffle_RevertIf_NotClosed() public open {
         vm.prank(OWNER);
-        raffle.openRaffle(tokenId1);
-
-        vm.prank(address(raffle));
-        uint256 tokenId2 = myNFT.mint();
+        uint256 tokenId = myNFT.mint();
+        vm.prank(OWNER);
+        myNFT.transferFrom(OWNER, address(raffle), tokenId);
 
         vm.expectRevert();
         vm.prank(OWNER);
-        raffle.openRaffle(tokenId2);
+        raffle.openRaffle(tokenId);
     }
 
-    function test_OpenRaffle_RevertIf_NFTNotAssigned() public {
+    function test_openRaffle_RevertIf_NFTNotAssigned() public {
         vm.prank(OWNER);
         uint256 tokenId = myNFT.mint();
 
