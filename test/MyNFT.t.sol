@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import {Test, console} from "forge-std/Test.sol";
 import {MyNFT} from "../src/MyNFT.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 contract MyNFTTest is Test {
     MyNFT public myNFT;
@@ -23,7 +24,7 @@ contract MyNFTTest is Test {
     }
 
     function test_Mint_RevertIf_NotOwner() public {
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, USER1));
         vm.prank(USER1);
         myNFT.mint();
     }

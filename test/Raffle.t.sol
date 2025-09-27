@@ -8,6 +8,8 @@ import {VRFCoordinatorV2_5Mock} from "@chainlink/contracts/src/v0.8/vrf/mocks/VR
 import {VRFV2PlusWrapper} from "@chainlink/contracts/src/v0.8/vrf/dev/VRFV2PlusWrapper.sol";
 import {MyNFT} from "../src/MyNFT.sol";
 import {Raffle} from "../src/Raffle.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 contract RaffleTest is Test {
     LinkToken public linkToken;
@@ -29,8 +31,8 @@ contract RaffleTest is Test {
     uint256 public constant NUMBER_OF_PLAYERS = 3;
     uint256 public constant REWARD_PERCENTAGE = 1;
 
-    uint32 private constant CALLBACK_GAS_LIMIT = 100000;
-    uint32 private constant NUM_WORDS = 1;
+    uint32 public constant CALLBACK_GAS_LIMIT = 100000;
+    uint32 public constant NUM_WORDS = 1;
     uint256 public constant RANDOM_WORD = 12345;
 
     function setUp() public {
@@ -94,11 +96,34 @@ contract RaffleTest is Test {
         _;
     }
 
+    modifier enter() {
+        vm.prank(PLAYER1);
+        raffle.enterRaffle{value: ENTRANCE_FEE}();
+        vm.prank(PLAYER2);
+        raffle.enterRaffle{value: ENTRANCE_FEE}();
+        vm.prank(PLAYER3);
+        raffle.enterRaffle{value: ENTRANCE_FEE}();
+        _;
+    }
+
+    modifier request() {
+        vm.prank(PLAYER3);
+        raffle.requestWinner();
+        uint256 requestId = raffle.currentRequestId();
+        uint256[] memory randomWords = new uint256[](1);
+        randomWords[0] = RANDOM_WORD;
+        vm.prank(address(wrapper));
+        raffle.rawFulfillRandomWords(requestId, randomWords);
+        _;
+    }
+
     function test_openRaffle() public {
         vm.prank(OWNER);
         uint256 tokenId = myNFT.mint();
         vm.prank(OWNER);
         myNFT.transferFrom(OWNER, address(raffle), tokenId);
+        vm.expectEmit(true, false, false, false);
+        emit Raffle.RaffleIsOpen(tokenId);
         vm.prank(OWNER);
         raffle.openRaffle(tokenId);
 
@@ -112,7 +137,8 @@ contract RaffleTest is Test {
         vm.prank(OWNER);
         myNFT.transferFrom(OWNER, address(raffle), tokenId);
 
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, PLAYER1));
+        vm.prank(PLAYER1);
         raffle.openRaffle(tokenId);
     }
 
@@ -122,7 +148,7 @@ contract RaffleTest is Test {
         vm.prank(OWNER);
         myNFT.transferFrom(OWNER, address(raffle), tokenId);
 
-        vm.expectRevert();
+        vm.expectRevert(Raffle.Raffle_StateMustBeClosed.selector);
         vm.prank(OWNER);
         raffle.openRaffle(tokenId);
     }
@@ -131,14 +157,15 @@ contract RaffleTest is Test {
         vm.prank(OWNER);
         uint256 tokenId = myNFT.mint();
 
-        vm.expectRevert();
+        vm.expectRevert(Raffle.Raffle_NFTRewardNotAssigned.selector);
         vm.prank(OWNER);
         raffle.openRaffle(tokenId);
     }
 
     function test_enterRaffle() public open {
         uint256 previousRaffleBalance = address(raffle).balance;
-
+        vm.expectEmit(true, false, false, false);
+        emit Raffle.NewPlayerEntered(PLAYER1);
         vm.prank(PLAYER1);
         raffle.enterRaffle{value: ENTRANCE_FEE}();
         uint256 currentRaffleBalance = address(raffle).balance;
@@ -148,43 +175,51 @@ contract RaffleTest is Test {
     }
 
     function test_enterRaffle_RevertIf_NotOpen() public {
-        vm.expectRevert();
+        vm.expectRevert(Raffle.Raffle_StateMustBeOpen.selector);
         vm.prank(PLAYER1);
         raffle.enterRaffle{value: ENTRANCE_FEE}();
     }
 
     function test_enterRaffle_RevertIf_InsufficientBalance() public open {
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(Raffle.Raffle_PlayerInsufficientBalance.selector, PLAYER1, ENTRANCE_FEE / 2));
         vm.prank(PLAYER1);
         raffle.enterRaffle{value: ENTRANCE_FEE / 2}();
     }
 
-    function test_enterRaffle_RevertIf_CapacityIsFull() public open {
-        vm.prank(PLAYER1);
-        raffle.enterRaffle{value: ENTRANCE_FEE}();
-        vm.prank(PLAYER2);
-        raffle.enterRaffle{value: ENTRANCE_FEE}();
-        vm.prank(PLAYER3);
-        raffle.enterRaffle{value: ENTRANCE_FEE}();
-
-        vm.expectRevert();
+    function test_enterRaffle_RevertIf_CapacityIsFull() public open enter {
+        vm.expectRevert(Raffle.Raffle_PlayerCapacityIsFull.selector);
         vm.prank(PLAYER4);
         raffle.enterRaffle{value: ENTRANCE_FEE}();
     }
 
-    function test_pickWinner() public open {
+    function test_receive() public open {
+        uint256 previousRaffleBalance = address(raffle).balance;
+        vm.expectEmit(true, false, false, false);
+        emit Raffle.NewPlayerEntered(PLAYER1);
         vm.prank(PLAYER1);
-        raffle.enterRaffle{value: ENTRANCE_FEE}();
-        vm.prank(PLAYER2);
-        raffle.enterRaffle{value: ENTRANCE_FEE}();
-        vm.prank(PLAYER3);
-        raffle.enterRaffle{value: ENTRANCE_FEE}();
+        (bool success, ) = address(raffle).call{value: ENTRANCE_FEE}("");
+        assertTrue(success);
+        uint256 currentRaffleBalance = address(raffle).balance;
 
+        assertEq(raffle.player(0), PLAYER1);
+        assertEq(currentRaffleBalance - previousRaffleBalance, ENTRANCE_FEE);
+    }
+
+    function test_receive_RevertIf_NotOpen() public {
+        vm.expectRevert(Raffle.Raffle_StateMustBeOpen.selector);
+        vm.prank(PLAYER1);
+        (bool success, ) = address(raffle).call{value: ENTRANCE_FEE}("");
+        assertTrue(success);
+    }
+
+    function test_pickWinner() public open enter {
         vm.prank(PLAYER3);
         raffle.requestWinner();
         uint256 requestId = raffle.currentRequestId();
         uint256[] memory randomWords = new uint256[](1);
         randomWords[0] = RANDOM_WORD;
+        vm.expectEmit(true, false, false, false);
+        emit Raffle.WinnerIsPicked(raffle.player(RANDOM_WORD % NUMBER_OF_PLAYERS));
         vm.prank(address(wrapper));
         raffle.rawFulfillRandomWords(requestId, randomWords);
 
@@ -194,22 +229,15 @@ contract RaffleTest is Test {
         assertEq(uint256(raffle.currentRequestId()), 0);
     }
 
-    function test_requestWinner() public open {
-        vm.prank(PLAYER1);
-        raffle.enterRaffle{value: ENTRANCE_FEE}();
-        vm.prank(PLAYER2);
-        raffle.enterRaffle{value: ENTRANCE_FEE}();
-        vm.prank(PLAYER3);
-        raffle.enterRaffle{value: ENTRANCE_FEE}();
-
-        uint256 player3BalanceBeforeRequest = address(PLAYER3).balance;
+    function test_requestWinner() public open enter {
+        uint256 previousPlayer3Balance = address(PLAYER3).balance;
         vm.prank(PLAYER3);
         raffle.requestWinner();
-        uint256 player3BalanceAfterRequest = address(PLAYER3).balance;
+        uint256 currentPlayer3Balance = address(PLAYER3).balance;
 
         uint256 rewardToPlayer3 = ((ENTRANCE_FEE * NUMBER_OF_PLAYERS) * REWARD_PERCENTAGE) / 100;
         assertEq(
-            player3BalanceAfterRequest - player3BalanceBeforeRequest,
+            currentPlayer3Balance - previousPlayer3Balance,
             rewardToPlayer3
         );
         uint256 requestId = raffle.currentRequestId();
@@ -218,7 +246,7 @@ contract RaffleTest is Test {
     }
 
     function test_requestWinner_RevertIf_NotOpen() public {
-        vm.expectRevert();
+        vm.expectRevert(Raffle.Raffle_StateMustBeOpen.selector);
         vm.prank(PLAYER1);
         raffle.requestWinner();
     }
@@ -229,27 +257,12 @@ contract RaffleTest is Test {
         vm.prank(PLAYER2);
         raffle.enterRaffle{value: ENTRANCE_FEE}();
 
-        vm.expectRevert();
+        vm.expectRevert(Raffle.Raffle_NotEnoughPlayer.selector);
         vm.prank(PLAYER3);
         raffle.requestWinner();
     }
 
-    function test_withdraw() public open {
-        vm.prank(PLAYER1);
-        raffle.enterRaffle{value: ENTRANCE_FEE}();
-        vm.prank(PLAYER2);
-        raffle.enterRaffle{value: ENTRANCE_FEE}();
-        vm.prank(PLAYER3);
-        raffle.enterRaffle{value: ENTRANCE_FEE}();
-
-        vm.prank(PLAYER3);
-        raffle.requestWinner();
-        uint256 requestId = raffle.currentRequestId();
-        uint256[] memory randomWords = new uint256[](1);
-        randomWords[0] = RANDOM_WORD;
-        vm.prank(address(wrapper));
-        raffle.rawFulfillRandomWords(requestId, randomWords);
-
+    function test_withdraw() public open enter request {
         uint256 amountFromEntrance = ENTRANCE_FEE * NUMBER_OF_PLAYERS;
         uint256 requestPrice = wrapper.calculateRequestPriceNative(
             CALLBACK_GAS_LIMIT,
@@ -258,13 +271,33 @@ contract RaffleTest is Test {
         uint256 rewardToRequestWinnerCaller = (amountFromEntrance * REWARD_PERCENTAGE) / 100;
         uint256 remainingAmount = amountFromEntrance - requestPrice - rewardToRequestWinnerCaller;
 
-        uint256 ownerBalanceBeforeWithdraw = address(OWNER).balance;
+        uint256 previousOwnerBalance = address(OWNER).balance;
+        vm.expectEmit(true, false, false, false);
+        emit Raffle.OwnerWithdraw(remainingAmount);
         vm.prank(OWNER);
         raffle.withdraw();
-        uint256 ownerBalanceAfterWithdraw = address(OWNER).balance;
+        uint256 currentOwnerBalance = address(OWNER).balance;
         assertEq(
-            ownerBalanceAfterWithdraw - ownerBalanceBeforeWithdraw,
+            currentOwnerBalance - previousOwnerBalance,
             remainingAmount
         );
+    }
+
+    function test_withdraw_RevertIf_NotOwner() public open enter request {
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, PLAYER1));
+        vm.prank(PLAYER1);
+        raffle.withdraw();
+    }
+
+    function test_withdraw_RevertIf_NotClosed() public open enter {
+        vm.expectRevert(Raffle.Raffle_StateMustBeClosed.selector);
+        vm.prank(OWNER);
+        raffle.withdraw();
+    }
+
+    function test_withdraw_RevertIf_ContractInsufficientBalance() public {
+        vm.expectRevert(Raffle.Raffle_ContractInsufficientBalance.selector);
+        vm.prank(OWNER);
+        raffle.withdraw();
     }
 }
