@@ -19,8 +19,7 @@ contract DeployScript is Script {
             address(0x195f15F2d49d693cE265b4fB0fdDbE15b1850Cc1),
             1e18,
             100,
-            address(myNFT),
-            1
+            address(myNFT)
         );
 
         vm.stopBroadcast();

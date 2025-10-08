@@ -29,7 +29,6 @@ contract RaffleTest is Test {
 
     uint256 public constant ENTRANCE_FEE = 1e18;
     uint256 public constant NUMBER_OF_PLAYERS = 3;
-    uint256 public constant REWARD_PERCENTAGE = 1;
 
     uint32 public constant CALLBACK_GAS_LIMIT = 100000;
     uint32 public constant NUM_WORDS = 1;
@@ -76,8 +75,7 @@ contract RaffleTest is Test {
             address(wrapper),
             ENTRANCE_FEE,
             NUMBER_OF_PLAYERS,
-            address(myNFT),
-            REWARD_PERCENTAGE
+            address(myNFT)
         );
 
         vm.deal(PLAYER1, STARTING_BALANCE);
@@ -230,16 +228,9 @@ contract RaffleTest is Test {
     }
 
     function test_requestWinner() public open enter {
-        uint256 previousPlayer3Balance = address(PLAYER3).balance;
         vm.prank(PLAYER3);
         raffle.requestWinner();
-        uint256 currentPlayer3Balance = address(PLAYER3).balance;
 
-        uint256 rewardToPlayer3 = ((ENTRANCE_FEE * NUMBER_OF_PLAYERS) * REWARD_PERCENTAGE) / 100;
-        assertEq(
-            currentPlayer3Balance - previousPlayer3Balance,
-            rewardToPlayer3
-        );
         uint256 requestId = raffle.currentRequestId();
         (address callbackAddress, , ) = wrapper.s_callbacks(requestId);
         assertEq(callbackAddress, address(raffle));
@@ -268,8 +259,7 @@ contract RaffleTest is Test {
             CALLBACK_GAS_LIMIT,
             NUM_WORDS
         );
-        uint256 rewardToRequestWinnerCaller = (amountFromEntrance * REWARD_PERCENTAGE) / 100;
-        uint256 remainingAmount = amountFromEntrance - requestPrice - rewardToRequestWinnerCaller;
+        uint256 remainingAmount = amountFromEntrance - requestPrice;
 
         uint256 previousOwnerBalance = address(OWNER).balance;
         vm.expectEmit(true, false, false, false);

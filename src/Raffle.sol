@@ -49,14 +49,15 @@ contract Raffle is Ownable, ReentrancyGuard, VRFV2PlusWrapperConsumerBase {
         address _vrfWrapperAddress,
         uint256 _entranceFee,
         uint256 _numberOfPlayers,
-        address _nftAddress,
-        uint256 _rewardPercentage
+        address _nftAddress
     ) Ownable(msg.sender) VRFV2PlusWrapperConsumerBase(_vrfWrapperAddress) {
+        require(_vrfWrapperAddress != address(0));
+        require(_nftAddress != address(0));
+
         i_owner = msg.sender;
         i_entranceFee = _entranceFee;
         i_numberOfPlayers = _numberOfPlayers;
         i_nftAddress = _nftAddress;
-        i_rewardPercentage = _rewardPercentage;
         s_state = RaffleState.Closed;
     }
 
@@ -110,18 +111,19 @@ contract Raffle is Ownable, ReentrancyGuard, VRFV2PlusWrapperConsumerBase {
 
         uint256 winnerIndex = _randomNumber % players.length;
         address winnerAddress = players[winnerIndex];
-        IERC721(i_nftAddress).transferFrom(
-            address(this),
-            winnerAddress,
-            s_priceTokenId
-        );
+        uint256 tempPriceTokenId = s_priceTokenId;
 
         delete s_players;
         s_state = RaffleState.Closed;
         s_priceTokenId = 0;
         s_currentRequestId = 0;
-
         emit WinnerIsPicked(winnerAddress);
+
+        IERC721(i_nftAddress).transferFrom(
+            address(this),
+            winnerAddress,
+            tempPriceTokenId
+        );
     }
 
     function requestWinner() external nonReentrant open {
@@ -129,10 +131,6 @@ contract Raffle is Ownable, ReentrancyGuard, VRFV2PlusWrapperConsumerBase {
             s_players.length == i_numberOfPlayers,
             Raffle_NotEnoughPlayer()
         );
-
-        uint256 reward = ((i_entranceFee * i_numberOfPlayers) * i_rewardPercentage) / 100;
-        (bool success, ) = address(msg.sender).call{value: reward}("");
-        require(success, Raffle_TransferBalanceFailed());
 
         bytes memory extraArgs = VRFV2PlusClient._argsToBytes(
             VRFV2PlusClient.ExtraArgsV1({nativePayment: true})
@@ -157,10 +155,10 @@ contract Raffle is Ownable, ReentrancyGuard, VRFV2PlusWrapperConsumerBase {
         uint256 contractBalance = address(this).balance;
         require(contractBalance > 0, Raffle_ContractInsufficientBalance());
 
+        emit OwnerWithdraw(contractBalance);
+
         (bool success, ) = address(msg.sender).call{value: contractBalance}("");
         require(success, Raffle_TransferBalanceFailed());
-
-        emit OwnerWithdraw(contractBalance);
     }
 
     function player(uint256 _index) public view returns (address) {
