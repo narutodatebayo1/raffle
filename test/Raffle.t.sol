@@ -115,6 +115,46 @@ contract RaffleTest is Test {
         _;
     }
 
+    function test_constructor_RevertIf_VrfWrapperAddressZero() public {
+        vm.expectRevert();
+        new Raffle(
+            address(0),
+            ENTRANCE_FEE,
+            NUMBER_OF_PLAYERS,
+            address(myNFT)
+        );
+    }
+
+    function test_constructor_RevertIf_EntranceFeeZero() public {
+        vm.expectRevert(Raffle.Raffle_EntranceFeeCantBeZero.selector);
+        new Raffle(
+            address(wrapper),
+            0,
+            NUMBER_OF_PLAYERS,
+            address(myNFT)
+        );
+    }
+
+    function test_constructor_RevertIf_NumberOfPlayerZero() public {
+        vm.expectRevert(Raffle.Raffle_NumberOfPlayerCantBeZero.selector);
+        new Raffle(
+            address(wrapper),
+            ENTRANCE_FEE,
+            0,
+            address(myNFT)
+        );
+    }
+
+    function test_constructor_RevertIf_nftAddressZero() public {
+        vm.expectRevert(Raffle.Raffle_AddressCantBeZero.selector);
+        new Raffle(
+            address(wrapper),
+            ENTRANCE_FEE,
+            NUMBER_OF_PLAYERS,
+            address(0)
+        );
+    }
+
     function test_openRaffle() public {
         vm.prank(OWNER);
         uint256 tokenId = myNFT.mint();

@@ -33,6 +33,9 @@ contract Raffle is Ownable, ReentrancyGuard, VRFV2PlusWrapperConsumerBase {
     event WinnerIsPicked(address indexed winner);
     event OwnerWithdraw(uint256 indexed amount);
 
+    error Raffle_AddressCantBeZero();
+    error Raffle_EntranceFeeCantBeZero();
+    error Raffle_NumberOfPlayerCantBeZero();
     error Raffle_StateMustBeOpen();
     error Raffle_StateMustBeClosed();
     error Raffle_NFTRewardNotAssigned();
@@ -51,8 +54,9 @@ contract Raffle is Ownable, ReentrancyGuard, VRFV2PlusWrapperConsumerBase {
         uint256 _numberOfPlayers,
         address _nftAddress
     ) Ownable(msg.sender) VRFV2PlusWrapperConsumerBase(_vrfWrapperAddress) {
-        require(_vrfWrapperAddress != address(0));
-        require(_nftAddress != address(0));
+        require(_entranceFee != 0, Raffle_EntranceFeeCantBeZero());
+        require(_numberOfPlayers != 0, Raffle_NumberOfPlayerCantBeZero());
+        require(_nftAddress != address(0), Raffle_AddressCantBeZero());
 
         i_owner = msg.sender;
         i_entranceFee = _entranceFee;
